@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>شبیه‌ساز سه بعدی منظومه شمسی</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+          font-family: 'Vazirmatn', sans-serif;
+          margin: 0;
+          overflow: hidden;
+          background-color: #000000;
+          color: white;
+      }
+      #simulation-container {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+      }
+      #bg {
+          display: block;
+      }
+      #labels-container {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+      }
+      .planet-label {
+          position: absolute;
+          color: white;
+          background-color: rgba(0, 0, 0, 0.5);
+          padding: 2px 5px;
+          border-radius: 3px;
+          font-size: 12px;
+          pointer-events: auto;
+          cursor: pointer;
+          transform: translate(-50%, 20px); /* Position below the planet */
+      }
+      #planet-nav {
+          position: absolute;
+          top: 20px;
+          left: 20px;
+          width: 150px;
+          max-height: calc(100vh - 40px);
+          background-color: rgba(0, 0, 0, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+          padding: 10px;
+          backdrop-filter: blur(10px);
+          overflow-y: auto;
+          z-index: 10;
+      }
+      .nav-button {
+          display: block;
+          width: 100%;
+          padding: 8px;
+          margin-bottom: 5px;
+          text-align: right;
+          background-color: transparent;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          transition: background-color 0.3s;
+      }
+      .nav-button:hover, .nav-button.active {
+          background-color: rgba(91, 127, 204, 0.5);
+      }
+      #info-panel {
+          position: absolute;
+          top: 20px;
+          right: 20px;
+          width: 300px;
+          max-height: calc(100vh - 40px);
+          background-color: rgba(0, 0, 0, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+          padding: 20px;
+          backdrop-filter: blur(10px);
+          overflow-y: auto;
+          transition: transform 0.5s ease-out;
+          transform: translateX(110%);
+          z-index: 10;
+      }
+      #info-panel.visible {
+          transform: translateX(0);
+      }
+      #close-btn {
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          cursor: pointer;
+          font-size: 1.5rem;
+          line-height: 1;
+      }
+      #loading-screen {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: #000;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          flex-direction: column;
+          z-index: 100;
+      }
+      .loader {
+          border: 8px solid #f3f3f3;
+          border-top: 8px solid #576CBC;
+          border-radius: 50%;
+          width: 60px;
+          height: 60px;
+          animation: spin 2s linear infinite;
+      }
+      @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-screen">
+      <div class="loader"></div>
+      <p class="mt-4 text-lg">در حال بارگذاری آسمان شب با کیفیت بالا...</p>
+    </div>
+
+    <div id="planet-nav"></div>
+
+    <div id="info-panel">
+      <span id="close-btn">&times;</span>
+      <h2 id="planet-name" class="text-2xl font-bold mb-4"></h2>
+      <p id="planet-description" class="text-sm mb-4"></p>
+      <div id="planet-stats" class="space-y-2 text-sm"></div>
+    </div>
+
+    <div id="simulation-container">
+      <canvas id="bg"></canvas>
+      <div id="labels-container"></div>
+    </div>
+
+    <script type="importmap">
+      {
+          "imports": {
+              "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+              "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+          }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+
+      const simulationContainer = document.getElementById('simulation-container');
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 20000);
+      const renderer = new THREE.WebGLRenderer({
+          canvas: document.querySelector('#bg'),
+          antialias: true
+      });
+
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.position.set(0, 150, 400);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.minDistance = 10;
+      controls.maxDistance = 5000;
+
+      const loadingScreen = document.getElementById('loading-screen');
+      const planetNav = document.getElementById('planet-nav');
+      const infoPanel = document.getElementById('info-panel');
+      const closeBtn = document.getElementById('close-btn');
+      const labelsContainer = document.getElementById('labels-container');
+
+      let selectedObject = null;
+      let lockedTarget = null;
+
+      const planetData = {
+          'خورشید': { size: 20, color: 0xffd700, distance: 0, orbitalPeriod: Infinity, description: "ستاره مرکزی منظومه شمسی که 99.86% جرم کل آن را تشکیل می‌دهد و منبع اصلی انرژی برای حیات روی زمین است.", stats: { diameter: "۱٬۳۹۲٬۷۰۰", distanceFromSun: "۰", orbitalPeriodYears: "---" } },
+          'عطارد': { size: 0.38, color: 0xbdbdbd, distance: 58, orbitalPeriod: 0.24, description: "کوچک‌ترین سیاره و نزدیک‌ترین به خورشید. به دلیل نداشتن جو قابل توجه، دچار نوسانات دمایی شدیدی می‌شود.", stats: { diameter: "۴٬۸۷۹", distanceFromSun: "۵۸", orbitalPeriodYears: "۰٫۲۴" } },
+          'زهره': { size: 0.95, color: 0xe6d5b8, distance: 108, orbitalPeriod: 0.62, description: "داغ‌ترین سیاره منظومه شمسی با جوی غلیظ که باعث ایجاد یک اثر گلخانه‌ای افسارگسیخته شده است.", stats: { diameter: "۱۲٬۱۰۴", distanceFromSun: "۱۰۸", orbitalPeriodYears: "۰٫۶۲" } },
+          'زمین': { size: 1, color: 0x6699ff, distance: 150, orbitalPeriod: 1, description: "خانه ما و تنها دنیای شناخته شده‌ای است که از حیات پشتیبانی می‌کند. دارای آب مایع و جوی غنی از اکسیژن است.", stats: { diameter: "۱۲٬۷۵۶", distanceFromSun: "۱۵۰", orbitalPeriodYears: "۱٫۰۰" } },
+          'مریخ': { size: 0.53, color: 0xd95c2b, distance: 228, orbitalPeriod: 1.88, description: "«سیاره سرخ» که به دلیل وجود اکسید آهن در سطحش به این نام معروف است. دارای جوی رقیق و کلاهک‌های یخی قطبی است.", stats: { diameter: "۶٬۷۹۲", distanceFromSun: "۲۲۸", orbitalPeriodYears: "۱٫۸۸" } },
+          'مشتری': { size: 11.2, color: 0xd1bfa8, distance: 778, orbitalPeriod: 11.86, description: "بزرگ‌ترین سیاره منظومه شمسی که جرم آن از مجموع جرم تمام سیارات دیگر بیشتر است. یک غول گازی با طوفان‌های عظیم است.", stats: { diameter: "۱۴۲٬۹۸۴", distanceFromSun: "۷۷۸", orbitalPeriodYears: "۱۱٫۸۶" } },
+          'زحل': { size: 9.45, color: 0xf5eccf, distance: 1427, orbitalPeriod: 29.46, description: "دومین سیاره بزرگ که به خاطر سیستم حلقه‌ای وسیع و تماشایی‌اش، متشکل از ذرات یخ و سنگ، شناخته می‌شود.", stats: { diameter: "۱۲۰٬۵۳۶", distanceFromSun: "۱٬۴۲۷", orbitalPeriodYears: "۲۹٫۴۶" } },
+          'اورانوس': { size: 4, color: 0xc7e9fa, distance: 2871, orbitalPeriod: 84.01, description: "یک «غول یخی» که به پهلو می‌چرخد و محور چرخش آن تقریباً 98 درجه انحراف دارد.", stats: { diameter: "۵۱٬۱۱۸", distanceFromSun: "۲٬۸۷۱", orbitalPeriodYears: "۸۴٫۰۱" } },
+          'نپتون': { size: 3.88, color: 0x5c72e0, distance: 4497, orbitalPeriod: 164.8, description: "دورترین سیاره اصلی و یک غول یخی دیگر است. این سیاره سردترین دماها و سریع‌ترین بادهای منظومه شمسی را دارد.", stats: { diameter: "۴۹٬۵۲۸", distanceFromSun: "۴٬۴۹۷", orbitalPeriodYears: "۱۶۴٫۸۰" } }
+      };
+
+      const celestialObjects = new THREE.Group();
+      const orbitPaths = new THREE.Group();
+      const labels = [];
+
+      new EXRLoader().load('https://exhibition.storage.c2.liara.space/starmap_2020_4k.exr', (texture) => {
+          texture.mapping = THREE.EquirectangularReflectionMapping;
+          scene.background = texture;
+          scene.environment = texture; // For realistic reflections on objects
+          loadingScreen.style.display = 'none';
+          animate();
+      },
+      undefined,
+      (err) => {
+          console.error('An error occurred while loading the EXR texture.', err);
+          loadingScreen.innerHTML = '<p>خطا در بارگذاری پس‌زمینه آسمان با کیفیت بالا.</p>';
+      });
+
+
+      function createCelestialBody(name, data) {
+          let geometry, material;
+          if (name === 'زحل') {
+              const group = new THREE.Group();
+              const planetGeometry = new THREE.SphereGeometry(data.size * 2, 64, 32);
+              const planetMaterial = new THREE.MeshStandardMaterial({
+                  color: data.color,
+                  roughness: 0.5,
+                  metalness: 0.1
+              });
+              const planet = new THREE.Mesh(planetGeometry, planetMaterial);
+
+              const ringGeometry = new THREE.TorusGeometry(data.size * 3.5, data.size * 0.8, 2, 100);
+              const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xaaa_888, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+              const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+              ring.rotation.x = Math.PI / 2;
+              group.add(planet);
+              group.add(ring);
+              return group;
+          } else {
+              geometry = new THREE.SphereGeometry(data.size * 2, 64, 32);
+              if (name === 'خورشید') {
+                  material = new THREE.MeshBasicMaterial({ color: data.color });
+              } else {
+                  material = new THREE.MeshStandardMaterial({
+                      color: data.color,
+                      roughness: 0.5,
+                      metalness: 0.1
+                  });
+              }
+              return new THREE.Mesh(geometry, material);
+          }
+      }
+
+      const sunLight = new THREE.PointLight(0xffffff, 3, 30000);
+      scene.add(sunLight);
+
+      const ambientLight = new THREE.AmbientLight(0xaaaaaa, 0.4);
+      scene.add(ambientLight);
+
+      for (const name in planetData) {
+          const data = planetData[name];
+          const body = createCelestialBody(name, data);
+
+          body.name = name;
+          body.userData = data;
+
+          body.position.x = data.distance;
+
+          celestialObjects.add(body);
+
+          if (data.distance > 0) {
+              const orbitGeometry = new THREE.TorusGeometry(data.distance, 0.2, 16, 200);
+              const orbitMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+              const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+              orbit.rotation.x = Math.PI / 2;
+              orbitPaths.add(orbit);
+          }
+
+          const labelDiv = document.createElement('div');
+          labelDiv.className = 'planet-label';
+          labelDiv.textContent = name;
+          labelDiv.addEventListener('click', () => handleObjectClick(body));
+          labelsContainer.appendChild(labelDiv);
+          labels.push({ div: labelDiv, object: body });
+
+          const navButton = document.createElement('button');
+          navButton.className = 'nav-button';
+          navButton.textContent = name;
+          navButton.dataset.name = name;
+          navButton.addEventListener('click', () => {
+              lockedTarget = body;
+              handleObjectClick(body);
+          });
+          planetNav.appendChild(navButton);
+      }
+      scene.add(celestialObjects);
+      scene.add(orbitPaths);
+
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+
+      function onMouseClick(event) {
+          if (event.target.closest('.planet-label') || event.target.closest('#planet-nav') || event.target.closest('#info-panel')) return;
+
+          mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+          mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+          raycaster.setFromCamera(mouse, camera);
+          const intersects = raycaster.intersectObjects(celestialObjects.children, true);
+          if (intersects.length > 0) {
+              let clickedObject = intersects[0].object;
+              while(clickedObject.parent && clickedObject.parent !== celestialObjects){
+                  clickedObject = clickedObject.parent;
+              }
+              lockedTarget = clickedObject;
+              handleObjectClick(clickedObject);
+          } else {
+              lockedTarget = null;
+              document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+              selectedObject = null;
+          }
+      }
+
+      function handleObjectClick(object) {
+          selectedObject = object;
+
+          document.querySelectorAll('.nav-button').forEach(btn => {
+              btn.classList.toggle('active', btn.dataset.name === selectedObject.name);
+          });
+
+          const data = selectedObject.userData;
+          const stats = data.stats;
+          document.getElementById('planet-name').innerText = selectedObject.name;
+          document.getElementById('planet-description').innerText = data.description;
+          document.getElementById('planet-stats').innerHTML = `
+              <p><strong>قطر:</strong> ${stats.diameter} کیلومتر</p>
+              <p><strong>فاصله از خورشید:</strong> ${stats.distanceFromSun} میلیون کیلومتر</p>
+              <p><strong>دوره مداری:</strong> ${stats.orbitalPeriodYears} سال زمینی</p>
+          `;
+          infoPanel.classList.add('visible');
+      }
+
+      simulationContainer.addEventListener('click', onMouseClick);
+      closeBtn.addEventListener('click', () => {
+          infoPanel.classList.remove('visible');
+          selectedObject = null;
+          lockedTarget = null;
+          document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+      });
+
+      function updateLabels() {
+          labels.forEach(labelItem => {
+              const { div, object } = labelItem;
+              const worldPosition = new THREE.Vector3();
+              object.getWorldPosition(worldPosition);
+              const screenPosition = worldPosition.clone().project(camera);
+
+              const distance = camera.position.distanceTo(worldPosition);
+              const isBehind = screenPosition.z > 1;
+
+              if (!isBehind && distance < 2000) {
+                  const x = (screenPosition.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
+                  const y = (-screenPosition.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
+
+                  div.style.display = 'block';
+                  div.style.left = `${x}px`;
+                  div.style.top = `${y}px`;
+                  div.style.opacity = Math.max(0, 1 - (distance / 2000)).toFixed(2);
+              } else {
+                  div.style.display = 'none';
+              }
+          });
+      }
+
+      function animate() {
+          requestAnimationFrame(animate);
+
+          const time = Date.now() * 0.001;
+
+          celestialObjects.children.forEach(body => {
+              body.rotation.y += 0.005;
+              if(body.userData.distance > 0) {
+                  body.position.x = Math.cos(time / body.userData.orbitalPeriod) * body.userData.distance;
+                  body.position.z = Math.sin(time / body.userData.orbitalPeriod) * body.userData.distance;
+              }
+          });
+
+          if (lockedTarget) {
+               if (lockedTarget.name === 'خورشید') {
+                  const sunTargetPosition = new THREE.Vector3(0, 0, 0);
+                  const sunCameraPosition = new THREE.Vector3(0, 200, 500);
+                  controls.target.lerp(sunTargetPosition, 0.1);
+                  camera.position.lerp(sunCameraPosition, 0.1);
+              } else {
+                  const targetPosition = new THREE.Vector3();
+                  lockedTarget.getWorldPosition(targetPosition);
+
+                  const lerpFactor = lockedTarget.userData.distance < 300 ? 0.3 : 0.1;
+
+                  controls.target.lerp(targetPosition, lerpFactor);
+
+                  const direction = targetPosition.clone().normalize();
+                  const offsetScale = lockedTarget.userData.size * 25 + 20;
+
+                  const desiredPosition = targetPosition.clone().add(direction.multiplyScalar(offsetScale));
+                  desiredPosition.y += offsetScale * 0.4;
+
+                  camera.position.lerp(desiredPosition, lerpFactor);
+              }
+          }
+
+          controls.update();
+          renderer.render(scene, camera);
+          updateLabels();
+      }
+
+      window.addEventListener('resize', () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>

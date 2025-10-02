@@ -1,0 +1,9 @@
+{
+    "app":"3dss",
+    "port":80,
+    "build":{
+        "location":"iran"
+    },
+    "disks":[
+    ]
+}
